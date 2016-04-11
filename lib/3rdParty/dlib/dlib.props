@@ -4,5 +4,8 @@
     <ClCompile>
       <AdditionalIncludeDirectories>$(SolutionDir)lib\3rdParty\dlib\include\dlib\..;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>$(SolutionDir)lib\3rdParty\boost\$(PlatformShortName)\$(PlatformToolset)\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+    </Link>
   </ItemDefinitionGroup>
 </Project>

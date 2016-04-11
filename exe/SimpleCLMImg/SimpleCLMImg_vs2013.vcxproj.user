@@ -4,7 +4,15 @@
     <LocalDebuggerCommandArguments>-fdir "../../videos/" -clmwild -oidir "../../videos/images_track/" -ofdir "../../videos/images_track/</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LocalDebuggerCommandArguments>-fdir "../../videos/" -clmwild -oidir "../../videos/images_track/" -ofdir "../../videos/images_track/</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LocalDebuggerCommandArguments>-fdir "../../videos/" -clmwild -oidir "../../videos/images_track/" -ofdir "../../videos/images_track/</LocalDebuggerCommandArguments>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerCommandArguments>-fdir "../../videos/" -clmwild -oidir "../../videos/images_track/" -ofdir "../../videos/images_track/</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
