@@ -57,36 +57,38 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\lib\3rdParty\boost\boost_d.props" />
     <Import Project="..\..\lib\3rdParty\dlib\dlib.props" />
-    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0d.props" />
     <Import Project="..\..\lib\3rdParty\tbb\tbb_d.props" />
+    <Import Project="..\..\dirconfig.props" />
+    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0d_x86.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\lib\3rdParty\boost\boost_d.props" />
     <Import Project="..\..\lib\3rdParty\dlib\dlib.props" />
-    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0d.props" />
     <Import Project="..\..\lib\3rdParty\tbb\tbb_d.props" />
+    <Import Project="..\..\dirconfig.props" />
+    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0d_x64.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\lib\3rdParty\boost\boost.props" />
     <Import Project="..\..\lib\3rdParty\dlib\dlib.props" />
     <Import Project="..\..\lib\3rdParty\tbb\tbb.props" />
-    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0.props" />
+    <Import Project="..\..\dirconfig.props" />
+    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0_x86.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\lib\3rdParty\boost\boost.props" />
     <Import Project="..\..\lib\3rdParty\dlib\dlib.props" />
     <Import Project="..\..\lib\3rdParty\tbb\tbb.props" />
-    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0.props" />
+    <Import Project="..\..\dirconfig.props" />
+    <Import Project="..\..\lib\3rdParty\OpenCV3.0\openCV3.0_x64.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <TargetName>SimpleCLM</TargetName>
-    <IntDir>$(ProjectDir)$(Configuration)-$(PlatformShortName)\</IntDir>
-    <OutDir>$(SolutionDir)$(Configuration)-$(PlatformShortName)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
@@ -95,7 +97,6 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <TargetName>SimpleCLM</TargetName>
-    <IntDir>$(ProjectDir)$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
@@ -126,7 +127,6 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>$(SolutionDir)\lib\local\CLM\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>false</OpenMPSupport>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -168,7 +168,6 @@
       <AdditionalIncludeDirectories>$(SolutionDir)\lib\local\CLM\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <OpenMPSupport>false</OpenMPSupport>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

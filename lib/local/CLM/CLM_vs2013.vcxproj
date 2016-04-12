@@ -54,38 +54,40 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\3rdParty\boost\boost.props" />
     <Import Project="..\..\3rdParty\dlib\dlib.props" />
+    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0_x86.props" />
     <Import Project="..\..\3rdParty\tbb\tbb.props" />
-    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0.props" />
+    <Import Project="..\..\..\dirconfig.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\3rdParty\boost\boost.props" />
     <Import Project="..\..\3rdParty\dlib\dlib.props" />
+    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0_x64.props" />
     <Import Project="..\..\3rdParty\tbb\tbb.props" />
-    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0.props" />
+    <Import Project="..\..\..\dirconfig.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\3rdParty\boost\boost_d.props" />
     <Import Project="..\..\3rdParty\dlib\dlib.props" />
-    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0d.props" />
+    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0d_x86.props" />
     <Import Project="..\..\3rdParty\tbb\tbb_d.props" />
+    <Import Project="..\..\..\dirconfig.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="..\..\3rdParty\boost\boost_d.props" />
     <Import Project="..\..\3rdParty\dlib\dlib.props" />
-    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0d.props" />
+    <Import Project="..\..\3rdParty\OpenCV3.0\openCV3.0d_x64.props" />
     <Import Project="..\..\3rdParty\tbb\tbb_d.props" />
+    <Import Project="..\..\..\dirconfig.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
     <_ProjectFileVersion>10.0.30319.1</_ProjectFileVersion>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(SolutionDir)$(Configuration)-$(PlatformShortName)\</OutDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">$(ProjectDir)$(Configuration)-$(PlatformShortName)\</IntDir>
-    <OutDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(SolutionDir)$(Configuration)\</OutDir>
-    <IntDir Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">$(ProjectDir)$(Configuration)\</IntDir>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
@@ -121,7 +123,6 @@ xcopy /I /E /Y /D "$(SolutionDir)lib\3rdParty\OpenCV3.0\classifiers" "$(OutDir)c
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <OpenMPSupport>false</OpenMPSupport>
       <AdditionalOptions>/Zm300 %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -168,7 +169,6 @@ xcopy /I /E /Y /D "$(SolutionDir)lib\3rdParty\OpenCV3.0\classifiers" "$(OutDir)c
       <PrecompiledHeader>Create</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <EnableEnhancedInstructionSet>StreamingSIMDExtensions2</EnableEnhancedInstructionSet>
       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
       <OpenMPSupport>false</OpenMPSupport>
       <AdditionalOptions>/Zm300 %(AdditionalOptions)</AdditionalOptions>
