@@ -48,6 +48,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 // SimpleCLM.cpp : Defines the entry point for the console application.
+#include "SimpleCLM.h"
 #include "CLM_core.h"
 
 #include <fstream>
@@ -78,6 +79,19 @@ printErrorAndAbort( std::string( "Fatal error: " ) + stream )
 using namespace std;
 using namespace cv;
 
+// clients of SimpleCLM only see opaque pointer.
+struct SimpleCLM {
+	CLMTracker::CLMParameters clm_parameters;
+	CLMTracker::CLM clm_model;	
+	double detection_certainty = 0.0;
+	float fx = 0;
+	float fy = 0; 
+	float cx = 0; 
+	float cy = 0;
+	float pos[3];
+	float rot[3];
+	int frame_count = 0;
+};
 vector<string> get_arguments(int argc, char **argv)
 {
 
@@ -95,19 +109,19 @@ double fps_tracker = -1.0;
 int64 t0 = 0;
 
 // Visualising the results
-void visualise_tracking(Mat& captured_image, Mat_<float>& depth_image, const CLMTracker::CLM& clm_model, const CLMTracker::CLMParameters& clm_parameters, int frame_count, double fx, double fy, double cx, double cy)
+void visualise_tracking(Mat& captured_image, Mat_<float>& depth_image, SimpleCLM* sclm)
 {
 
 	// Drawing the facial landmarks on the face and the bounding box around it if tracking is successful and initialised
-	double detection_certainty = clm_model.detection_certainty;
-	bool detection_success = clm_model.detection_success;
+	double detection_certainty = sclm->clm_model.detection_certainty;
+	bool detection_success = sclm->clm_model.detection_success;
 
 	double visualisation_boundary = 0.2;
 
 	// Only draw if the reliability is reasonable, the value is slightly ad-hoc
 	if (detection_certainty < visualisation_boundary)
 	{
-		CLMTracker::Draw(captured_image, clm_model);
+		CLMTracker::Draw(captured_image, sclm->clm_model);
 
 		double vis_certainty = detection_certainty;
 		if (vis_certainty > 1)
@@ -120,15 +134,15 @@ void visualise_tracking(Mat& captured_image, Mat_<float>& depth_image, const CLM
 		// A rough heuristic for box around the face width
 		int thickness = (int)std::ceil(2.0* ((double)captured_image.cols) / 640.0);
 
-		Vec6d pose_estimate_to_draw = CLMTracker::GetCorrectedPoseWorld(clm_model, fx, fy, cx, cy);
+		Vec6d pose_estimate_to_draw = CLMTracker::GetCorrectedPoseWorld(sclm->clm_model, sclm->fx, sclm->fy, sclm->cx, sclm->cy);
 
 		// Draw it in reddish if uncertain, blueish if certain
-		CLMTracker::DrawBox(captured_image, pose_estimate_to_draw, Scalar((1 - vis_certainty)*255.0, 0, vis_certainty * 255), thickness, fx, fy, cx, cy);
+		CLMTracker::DrawBox(captured_image, pose_estimate_to_draw, Scalar((1 - vis_certainty)*255.0, 0, vis_certainty * 255), thickness, sclm->fx, sclm->fy, sclm->cx, sclm->cy);
 
 	}
 
 	// Work out the framerate
-	if (frame_count % 10 == 0)
+	if (sclm->frame_count % 10 == 0)
 	{
 		double t1 = cv::getTickCount();
 		fps_tracker = 10.0 / (double(t1 - t0) / cv::getTickFrequency());
@@ -140,9 +154,18 @@ void visualise_tracking(Mat& captured_image, Mat_<float>& depth_image, const CLM
 	std::sprintf(fpsC, "%d", (int)fps_tracker);
 	string fpsSt("FPS:");
 	fpsSt += fpsC;
-	cv::putText(captured_image, fpsSt, cv::Point(10, 20), CV_FONT_HERSHEY_SIMPLEX, 0.5, CV_RGB(255, 0, 0));
+	int fontface = CV_FONT_HERSHEY_SIMPLEX;
+	float fontscale = 1.3f;
+	int thickness = 3;
+	int baseline;
+	cv::Size textsz = cv::getTextSize(fpsSt, fontface, fontscale, thickness, &baseline);
+	//textsz.height -= baseline;
+	textsz.width = 5;
+	textsz.height += 5;
+	cv::putText(captured_image, fpsSt, textsz, fontface, fontscale, CV_RGB(255, 0, 0), thickness);
 
-	if (!clm_parameters.quiet_mode)
+	#if 0
+	if (!sclm->clm_parameters.quiet_mode)
 	{
 		namedWindow("tracking_result", 1);
 		imshow("tracking_result", captured_image);
@@ -154,324 +177,235 @@ void visualise_tracking(Mat& captured_image, Mat_<float>& depth_image, const CLM
 		}
 
 	}
+	waitKey(1);
+	#endif
 }
 
-int main (int argc, char **argv)
-{
-
+int SimpleCLM_initStream(VideoCapture* video_capture, int argc, char** argv) {
 	vector<string> arguments = get_arguments(argc, argv);
-
-	// Some initial parameters that can be overriden from command line	
+	bool use_world_coordinates;
 	vector<string> files, depth_directories, pose_output_files, tracked_videos_output, landmark_output_files, landmark_3D_output_files;
-	
+	CLMTracker::get_video_input_output_params(files, depth_directories, pose_output_files, tracked_videos_output, landmark_output_files, landmark_3D_output_files, use_world_coordinates, arguments);
 	// By default try webcam 0
 	int device = 0;
 
-
-
-	CLMTracker::CLMParameters clm_parameters(arguments);
-
-	// Get the input output file parameters
 	
-	// Indicates that rotation should be with respect to world or camera coordinates
-	bool use_world_coordinates;
-	CLMTracker::get_video_input_output_params(files, depth_directories, pose_output_files, tracked_videos_output, landmark_output_files, landmark_3D_output_files, use_world_coordinates, arguments);
-	
+	bool streaming = false;
+	if (files.size() == 0) {
+		INFO_STREAM("NO VIDEO FILES");
+		streaming = true;
+	} else if (files.size() > 1) {
+		INFO_STREAM("MULTIPLE VIDEO FILES SPECIFIED. IGNORING ALL EXCEPT FIRST.");
+	}
+
+
+
+	double fps_vid_in = -1.0;
+
+	// Do some grabbing
+	if(!streaming)
+	{
+		string current_file = files[0];
+		INFO_STREAM( "Attempting to read from file: " << current_file );
+		*video_capture = VideoCapture( current_file );
+		fps_vid_in = video_capture->get(CV_CAP_PROP_FPS);
+		
+		// Check if fps is nan or less than 0
+		if (fps_vid_in != fps_vid_in || fps_vid_in <= 0)
+		{
+			INFO_STREAM("FPS of the video file cannot be determined, assuming 30");
+			fps_vid_in = 30;
+		}
+	}
+	else
+	{
+		INFO_STREAM( "Attempting to capture from device: " << device );
+		*video_capture = VideoCapture( device );
+	}
+
+	if( !video_capture->isOpened() ) FATAL_STREAM( "Failed to open video source" );
+	else INFO_STREAM( "Device or file opened");
+
+	return 0;
+}
+void SimpleCLM_initIntrinsics(SimpleCLM* sclm, int videow, int videoh) {
+	// If optical centers are not defined just use center of image
+	sclm->cx = videow / 2.0f;
+	sclm->cy = videoh / 2.0f;
+	// Use a rough guess-timate of focal length
+	sclm->fx = 500 * (videow / 640.0);
+	sclm->fy = 500 * (videoh / 480.0);
+
+	sclm->fx = (sclm->fx + sclm->fy) / 2.0;
+	sclm->fy = sclm->fx;
+}
+void SimpleCLM_setFocalLength(SimpleCLM* sclm, float cx, float cy, float fx, float fy) {
+	sclm->cx = cx;
+	sclm->cy = cy;
+	sclm->fx = fx;
+	sclm->fy = fy;
+}
+// FIXME no cv in this signature. Do pointer / width / height
+void SimpleCLM_processFrame(SimpleCLM* sclm, uchar* data, int w, int h) {
+	Mat_<uchar> grayscale_image(h, w, data);
+	Mat_<float> depth_image;
+
+	// The actual facial landmark detection / tracking
+	bool detection_success = CLMTracker::DetectLandmarksInVideo(grayscale_image, depth_image, sclm->clm_model, sclm->clm_parameters);
+
+	// Work out the pose of the head from the tracked model
+	Vec6d pose_estimate_CLM = CLMTracker::GetCorrectedPoseCamera(sclm->clm_model, sclm->fx, sclm->fy, sclm->cx, sclm->cy);
+
+	// Visualising the results
+	// Drawing the facial landmarks on the face and the bounding box around it if tracking is successful and initialised
+	sclm->detection_certainty = sclm->clm_model.detection_certainty;
+
+	Vec6d pose_estimate_to_draw = CLMTracker::GetCorrectedPoseWorld(sclm->clm_model, sclm->fx, sclm->fy, sclm->cx, sclm->cy);
+	sclm->pos[0] = pose_estimate_to_draw[0];
+	sclm->pos[1] = pose_estimate_to_draw[1];
+	sclm->pos[2] = pose_estimate_to_draw[2];
+
+	sclm->rot[0] = pose_estimate_to_draw[3];
+	sclm->rot[1] = pose_estimate_to_draw[4];
+	sclm->rot[2] = pose_estimate_to_draw[5];
+
+
+	// Update the frame count
+	sclm->frame_count++;
+}
+void SimpleCLM_visualize(SimpleCLM* sclm, uint8_t* data, int w, int h) {
+	Mat_<float> depth_image;
+	Mat_<Vec3b> captured_image(h, w, (Vec3b*)data);
+	visualise_tracking(captured_image, depth_image, sclm);
+}
+void SimpleCLM_getPose(SimpleCLM* sclm, float* pos, float* rot) {
+	for (int i = 0; i < 3; ++i) {
+		pos[i] = sclm->pos[i];
+		rot[i] = sclm->rot[i];
+	}
+
+}
+int SimpleCLM_initModel(SimpleCLM* sclm, int argc, char** argv) {
+	vector<string> arguments = get_arguments(argc, argv);
+	// Some initial parameters that can be overriden from command line	
+	sclm->clm_parameters = CLMTracker::CLMParameters(arguments);
 	// The modules that are being used for tracking
-	CLMTracker::CLM clm_model(clm_parameters.model_location);	
-
-	// Grab camera parameters, if they are not defined (approximate values will be used)
-	float fx = 0, fy = 0, cx = 0, cy = 0;
-	// Get camera parameters
-	CLMTracker::get_camera_params(device, fx, fy, cx, cy, arguments);
-
-	// If cx (optical axis centre) is undefined will use the image size/2 as an estimate
-	bool cx_undefined = false;
-	bool fx_undefined = false;
-	if (cx == 0 || cy == 0)
-	{
-		cx_undefined = true;
+	sclm->clm_model = CLMTracker::CLM(sclm->clm_parameters.model_location);
+	for (int i = 0 ; i < 3 ; ++i) {
+		sclm->pos[i] = 0.0f;
+		sclm->rot[i] = 0.0f;
 	}
-	if (fx == 0 || fy == 0)
-	{
-		fx_undefined = true;
-	}
+	return 0;
+}
+SimpleCLM* SimpleCLM_create() {
+	return new SimpleCLM();
+}
+CLMAPI void SimpleCLM_free(SimpleCLM* sclm) {
+	delete sclm;
+}
 
-	// If multiple video files are tracked, use this to indicate if we are done
+
+int SimpleCLM_run (int argc, char **argv)
+{
+	SimpleCLM* sclm = SimpleCLM_create();
+	SimpleCLM_initModel(sclm, argc, argv);
+
+	VideoCapture video_capture;
+	SimpleCLM_initStream(&video_capture, argc, argv);
+
+	Mat captured_image;
+	video_capture >> captured_image;		
+	SimpleCLM_initIntrinsics(sclm, captured_image.cols, captured_image.rows);
+
+	// END INIT
 	bool done = false;	
-	int f_n = -1;
-
-	while(!done) // this is not a for loop as we might also be reading from a webcam
+	INFO_STREAM( "Starting tracking");
+	while(!done && !captured_image.empty()) // this is not a for loop as we might also be reading from a webcam
 	{
-		
-		string current_file;
-
-		// We might specify multiple video files as arguments
-		if(files.size() > 0)
-		{
-			f_n++;			
-		    current_file = files[f_n];
-		}
-		else
-		{
-			// If we want to write out from webcam
-			f_n = 0;
-		}
-
-		double fps_vid_in = -1.0;
-
-		bool use_depth = !depth_directories.empty();	
-
-		// Do some grabbing
-		VideoCapture video_capture;
-		if( current_file.size() > 0 )
-		{
-			INFO_STREAM( "Attempting to read from file: " << current_file );
-			video_capture = VideoCapture( current_file );
-			fps_vid_in = video_capture.get(CV_CAP_PROP_FPS);
-			
-			// Check if fps is nan or less than 0
-			if (fps_vid_in != fps_vid_in || fps_vid_in <= 0)
-			{
-				INFO_STREAM("FPS of the video file cannot be determined, assuming 30");
-				fps_vid_in = 30;
-			}
-		}
-		else
-		{
-			INFO_STREAM( "Attempting to capture from device: " << device );
-			video_capture = VideoCapture( device );
-
-			// Read a first frame often empty in camera
-			Mat captured_image;
-			video_capture >> captured_image;
-		}
-
-		if( !video_capture.isOpened() ) FATAL_STREAM( "Failed to open video source" );
-		else INFO_STREAM( "Device or file opened");
-
-		Mat captured_image;
-		video_capture >> captured_image;		
-
-		// If optical centers are not defined just use center of image
-		if (cx_undefined)
-		{
-			cx = captured_image.cols / 2.0f;
-			cy = captured_image.rows / 2.0f;
-		}
-		// Use a rough guess-timate of focal length
-		if (fx_undefined)
-		{
-			fx = 500 * (captured_image.cols / 640.0);
-			fy = 500 * (captured_image.rows / 480.0);
-
-			fx = (fx + fy) / 2.0;
-			fy = fx;
-		}
-
-		// Creating output files
-		std::ofstream pose_output_file;
-		if(!pose_output_files.empty())
-		{
-			pose_output_file.open (pose_output_files[f_n], ios_base::out);
-			pose_output_file << "frame, timestamp, confidence, success, Tx, Ty, Tz, Rx, Ry, Rz";
-			pose_output_file << endl;
-		}
-	
-		std::ofstream landmarks_output_file;		
-		if(!landmark_output_files.empty())
-		{
-			landmarks_output_file.open(landmark_output_files[f_n], ios_base::out);
-			landmarks_output_file << "frame, timestamp, confidence, success";
-			for (int i = 0; i < clm_model.pdm.NumberOfPoints(); ++i)
-				landmarks_output_file << ", x" << i;
-
-			for (int i = 0; i < clm_model.pdm.NumberOfPoints(); ++i)
-				landmarks_output_file << ", y" << i;
-
-			landmarks_output_file << endl;
-		}
-
-		std::ofstream landmarks_3D_output_file;
-		if(!landmark_3D_output_files.empty())
-		{
-			landmarks_3D_output_file.open(landmark_3D_output_files[f_n], ios_base::out);
-
-			landmarks_3D_output_file << "frame, timestamp, confidence, success";
-			for (int i = 0; i < clm_model.pdm.NumberOfPoints(); ++i)
-				landmarks_3D_output_file << ", X" << i;
-
-			for (int i = 0; i < clm_model.pdm.NumberOfPoints(); ++i)
-				landmarks_3D_output_file << ", Y" << i;
-
-			for (int i = 0; i < clm_model.pdm.NumberOfPoints(); ++i)
-				landmarks_3D_output_file << ", Z" << i;
-
-			landmarks_3D_output_file << endl;
-		}
-	
-		int frame_count = 0;
-		
-		// saving the videos
-		VideoWriter writerFace;
-		if(!tracked_videos_output.empty())
-		{
-			double fps = fps_vid_in == -1 ? 30 : fps_vid_in;
-			writerFace = VideoWriter(tracked_videos_output[f_n], CV_FOURCC('D', 'I', 'V', 'X'), fps, captured_image.size(), true);
-		}
-
 		// Use for timestamping if using a webcam
 		int64 t_initial = cv::getTickCount();
 
 		// Timestamp in seconds of current processing
-		double time_stamp = 0;
-		
-		INFO_STREAM( "Starting tracking");
-		while(!captured_image.empty())
-		{		
+		int fps_vid_in = 30;
 
-			// Grab the timestamp first
-			if (fps_vid_in == -1)
-			{
-				int64 curr_time = cv::getTickCount();
-				time_stamp = (double(curr_time - t_initial) / cv::getTickFrequency());
-			}
-			else 
-			{
-				time_stamp = (double)frame_count * (1.0 / fps_vid_in);
-			}
+		// Reading the images
+		Mat_<float> depth_image;
+		Mat_<uchar> grayscale_image;
 
-			// Reading the images
-			Mat_<float> depth_image;
-			Mat_<uchar> grayscale_image;
-
-			if(captured_image.channels() == 3)
-			{
-				cvtColor(captured_image, grayscale_image, CV_BGR2GRAY);				
-			}
-			else
-			{
-				grayscale_image = captured_image.clone();				
-			}
-		
-			// Get depth image
-			if(use_depth)
-			{
-				char* dst = new char[100];
-				std::stringstream sstream;
-
-				sstream << depth_directories[f_n] << "\\depth%05d.png";
-				sprintf(dst, sstream.str().c_str(), frame_count + 1);
-				// Reading in 16-bit png image representing depth
-				Mat_<short> depth_image_16_bit = imread(string(dst), -1);
-
-				// Convert to a floating point depth image
-				if(!depth_image_16_bit.empty())
-				{
-					depth_image_16_bit.convertTo(depth_image, CV_32F);
-				}
-				else
-				{
-					WARN_STREAM( "Can't find depth image" );
-				}
-			}
-			
-			// The actual facial landmark detection / tracking
-			bool detection_success = CLMTracker::DetectLandmarksInVideo(grayscale_image, depth_image, clm_model, clm_parameters);
-
-			// Work out the pose of the head from the tracked model
-			Vec6d pose_estimate_CLM;
-			if(use_world_coordinates)
-			{
-				pose_estimate_CLM = CLMTracker::GetCorrectedPoseWorld(clm_model, fx, fy, cx, cy);
-			}
-			else
-			{
-				pose_estimate_CLM = CLMTracker::GetCorrectedPoseCamera(clm_model, fx, fy, cx, cy);
-			}
-
-			// Visualising the results
-			// Drawing the facial landmarks on the face and the bounding box around it if tracking is successful and initialised
-			double detection_certainty = clm_model.detection_certainty;
-
-			visualise_tracking(captured_image, depth_image, clm_model, clm_parameters, frame_count, fx, fy, cx, cy);
-
-			// Output the detected facial landmarks
-			if(!landmark_output_files.empty())
-			{
-				double confidence = 0.5 * (1 - clm_model.detection_certainty);
-				landmarks_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success;
-				for (int i = 0; i < clm_model.pdm.NumberOfPoints() * 2; ++ i)
-				{
-					landmarks_output_file << ", " << clm_model.detected_landmarks.at<double>(i);
-				}
-				landmarks_output_file << endl;
-			}
-
-			// Output the detected facial landmarks
-			if(!landmark_3D_output_files.empty())
-			{
-				double confidence = 0.5 * (1 - clm_model.detection_certainty);
-				landmarks_3D_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success;
-				Mat_<double> shape_3D = clm_model.GetShape(fx, fy, cx, cy);
-				for (int i = 0; i < clm_model.pdm.NumberOfPoints() * 3; ++i)
-				{
-					landmarks_3D_output_file << ", " << shape_3D.at<double>(i);
-				}
-				landmarks_3D_output_file << endl;
-			}
-
-			// Output the estimated head pose
-			if(!pose_output_files.empty())
-			{
-				double confidence = 0.5 * (1 - clm_model.detection_certainty);
-				pose_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success
-					<< ", " << pose_estimate_CLM[0] << ", " << pose_estimate_CLM[1] << ", " << pose_estimate_CLM[2]
-					<< ", " << pose_estimate_CLM[3] << ", " << pose_estimate_CLM[4] << ", " << pose_estimate_CLM[5] << endl;
-			}
-
-			// output the tracked video
-			if(!tracked_videos_output.empty())
-			{		
-				writerFace << captured_image;
-			}
-
-			video_capture >> captured_image;
-		
-			// detect key presses
-			char character_press = cv::waitKey(1);
-			
-			// restart the tracker
-			if(character_press == 'r')
-			{
-				clm_model.Reset();
-			}
-			// quit the application
-			else if(character_press=='q')
-			{
-				return(0);
-			}
-
-			// Update the frame count
-			frame_count++;
-
+		if(captured_image.channels() == 3)
+		{
+			cvtColor(captured_image, grayscale_image, CV_BGR2GRAY);				
 		}
+		else
+		{
+			grayscale_image = captured_image.clone();				
+		}
+	
+		SimpleCLM_processFrame(sclm, grayscale_image.data, grayscale_image.cols, grayscale_image.rows);
+		int elemsize = captured_image.elemSize();
+		SimpleCLM_visualize(sclm, captured_image.data, captured_image.cols, captured_image.rows);
+
+		// Output the detected facial landmarks
+		#if 0
+		if(!landmark_output_files.empty())
+		{
+			double confidence = 0.5 * (1 - clm_model.detection_certainty);
+			landmarks_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success;
+			for (int i = 0; i < clm_model.pdm.NumberOfPoints() * 2; ++ i)
+			{
+				landmarks_output_file << ", " << clm_model.detected_landmarks.at<double>(i);
+			}
+			landmarks_output_file << endl;
+		}
+
+		// Output the detected facial landmarks
+		if(!landmark_3D_output_files.empty())
+		{
+			double confidence = 0.5 * (1 - clm_model.detection_certainty);
+			landmarks_3D_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success;
+			Mat_<double> shape_3D = clm_model.GetShape(fx, fy, cx, cy);
+			for (int i = 0; i < clm_model.pdm.NumberOfPoints() * 3; ++i)
+			{
+				landmarks_3D_output_file << ", " << shape_3D.at<double>(i);
+			}
+			landmarks_3D_output_file << endl;
+		}
+
+		// Output the estimated head pose
+		if(!pose_output_files.empty())
+		{
+			double confidence = 0.5 * (1 - clm_model.detection_certainty);
+			pose_output_file << frame_count + 1 << ", " << time_stamp << ", " << confidence << ", " << detection_success
+				<< ", " << pose_estimate_CLM[0] << ", " << pose_estimate_CLM[1] << ", " << pose_estimate_CLM[2]
+				<< ", " << pose_estimate_CLM[3] << ", " << pose_estimate_CLM[4] << ", " << pose_estimate_CLM[5] << endl;
+		}
+
+		// output the tracked video
+		if(!tracked_videos_output.empty())
+		{		
+			writerFace << captured_image;
+		}
+		#endif
+
+		video_capture >> captured_image;
+	
+		// detect key presses
+		char character_press = cv::waitKey(1);
 		
-		frame_count = 0;
-
-		// Reset the model, for the next video
-		clm_model.Reset();
-
-		pose_output_file.close();
-		landmarks_output_file.close();
-
-		// break out of the loop if done with all the files (or using a webcam)
-		if(f_n == files.size() -1 || files.empty())
+		// restart the tracker
+		if(character_press == 'r')
+		{
+			sclm->clm_model.Reset();
+		}
+		// quit the application
+		else if(character_press=='q')
 		{
 			done = true;
 		}
+
 	}
 
+	SimpleCLM_free(sclm);
 	return 0;
 }
 
